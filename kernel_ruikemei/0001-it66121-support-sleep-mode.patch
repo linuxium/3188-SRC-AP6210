@@ -1,0 +1,131 @@
+From 6c6db5d69d57ebca3f4deda0c986b279e7ffdc2b Mon Sep 17 00:00:00 2001
+From: htc <htc@hotack.cn>
+Date: Thu, 11 Jul 2013 16:28:10 +0800
+Subject: [PATCH] it66121: support sleep mode.
+
+---
+ drivers/video/rockchip/hdmi/it66121/hdmitx_sys.c |    3 +-
+ drivers/video/rockchip/hdmi/it66121/it66121.c    |   46 ++++++++++++++++++++--
+ drivers/video/rockchip/hdmi/it66121/it66121.h    |    9 +++++
+ 3 files changed, 53 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/video/rockchip/hdmi/it66121/hdmitx_sys.c b/drivers/video/rockchip/hdmi/it66121/hdmitx_sys.c
+index d97fbd1..882c584 100755
+--- a/drivers/video/rockchip/hdmi/it66121/hdmitx_sys.c
++++ b/drivers/video/rockchip/hdmi/it66121/hdmitx_sys.c
+@@ -134,9 +134,10 @@ static int HPDStatus = 0;
+ 
+ int it66121_poll_status(struct hdmi *hdmi)
+ {
++	struct it66121 *it66121 = hdmi->property->priv;
+ 	char HPDChangeStatus;
+ 	CheckHDMITX((BYTE*)&HPDStatus, &HPDChangeStatus);
+-	if(HPDChangeStatus)
++	if(HPDChangeStatus && it66121->enable)
+ 		hdmi_submit_work(hdmi, HDMI_HPD_CHANGE, 10, NULL);
+ 	return HDMI_ERROR_SUCESS;
+ }
+diff --git a/drivers/video/rockchip/hdmi/it66121/it66121.c b/drivers/video/rockchip/hdmi/it66121/it66121.c
+index 3804961..39177c4 100755
+--- a/drivers/video/rockchip/hdmi/it66121/it66121.c
++++ b/drivers/video/rockchip/hdmi/it66121/it66121.c
+@@ -31,8 +31,10 @@ static void it66121_irq_work_func(struct work_struct *work)
+ {
+ 	struct hdmi *hdmi = it66121->hdmi;
+ 
+-	it66121_poll_status(hdmi);
+-	queue_delayed_work(it66121->workqueue, &it66121->delay_work, 50);
++	if(it66121->enable) {
++		it66121_poll_status(hdmi);
++		queue_delayed_work(it66121->workqueue, &it66121->delay_work, 50);
++	}
+ }
+ 
+ static irqreturn_t it66121_detect_irq(int irq, void *dev_id)
+@@ -41,11 +43,40 @@ static irqreturn_t it66121_detect_irq(int irq, void *dev_id)
+     return IRQ_HANDLED;
+ }
+ 
++static int it66121_enable(struct hdmi *hdmi)
++{
++	it66121->enable = 1;
++	queue_delayed_work(it66121->workqueue, &it66121->delay_work, 50);
++	return 0;
++}
++
++static int it66121_disable(struct hdmi *hdmi)
++{
++	it66121->enable = 0;
++	return 0;
++}
++
++#ifdef CONFIG_HAS_EARLYSUSPEND
++static void it66121_early_suspend(struct early_suspend *h)
++{
++	struct hdmi *hdmi = it66121->hdmi;
++	hdmi_submit_work(hdmi, HDMI_SUSPEND_CTL, 0, NULL);
++	return;
++}
++
++static void it66121_early_resume(struct early_suspend *h)
++{
++	struct hdmi *hdmi = it66121->hdmi;		
++	hdmi_submit_work(hdmi, HDMI_RESUME_CTL, 0, NULL);
++	return;
++}
++#endif
++
+ static struct hdmi_property it66121_property;
+ 
+ static struct hdmi_ops it66121_ops = {
+-//	.enable = it66121_enable,
+-//	.disable = it66121_disable,
++	.enable = it66121_enable,
++	.disable = it66121_disable,
+ 	.getStatus = it66121_detect_hotplug,
+ 	.insert = it66121_insert,
+ 	.remove = it66121_remove,
+@@ -98,6 +129,13 @@ static int it66121_i2c_probe(struct i2c_client *client,const struct i2c_device_i
+ 		goto err_hdmi_register;
+ 	}
+ 	
++	#ifdef CONFIG_HAS_EARLYSUSPEND
++	it66121->early_suspend.suspend = it66121_early_suspend;
++	it66121->early_suspend.resume = it66121_early_resume;
++	it66121->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB - 10;
++	register_early_suspend(&it66121->early_suspend);
++	#endif
++	
+ 	//Power on it66121
+ 	if(it66121->io_pwr_pin != INVALID_GPIO) {
+ 		rc = gpio_request(it66121->io_pwr_pin, NULL);
+diff --git a/drivers/video/rockchip/hdmi/it66121/it66121.h b/drivers/video/rockchip/hdmi/it66121/it66121.h
+index 601f3bb..99a7f2d 100755
+--- a/drivers/video/rockchip/hdmi/it66121/it66121.h
++++ b/drivers/video/rockchip/hdmi/it66121/it66121.h
+@@ -5,6 +5,10 @@
+ #include "hdmitx.h"
+ #include "hdmitx_sys.h"
+ 
++#ifdef CONFIG_HAS_EARLYSUSPEND
++#include <linux/earlysuspend.h>
++#endif
++
+ #define IT66121_I2C_RATE	100 * 1000
+ #define delay1ms	msleep
+ 
+@@ -46,6 +50,11 @@ struct it66121 {
+ 	struct work_struct	irq_work;
+ 	struct delayed_work delay_work;
+ 	struct workqueue_struct *workqueue;
++	
++#ifdef CONFIG_HAS_EARLYSUSPEND
++	struct early_suspend	early_suspend;
++#endif
++	int enable;
+ };
+ 
+ extern int it66121_initial(void);
+-- 
+1.7.10.4
+
