@@ -226,6 +226,7 @@ static int rk3188_lcdc_open(struct rk_lcdc_device_driver *dev_drv,int layer_id,b
 	if((open) && (!lcdc_dev->atv_layer_cnt)) //enable clk,when first layer open
 	{
 		rk3188_lcdc_clk_enable(lcdc_dev);
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 		rk3188_lcdc_reg_resume(lcdc_dev); //resume reg
 		rk3188_load_screen(dev_drv,1);
 		spin_lock(&lcdc_dev->reg_lock);
@@ -244,6 +245,7 @@ static int rk3188_lcdc_open(struct rk_lcdc_device_driver *dev_drv,int layer_id,b
 			lcdc_msk_reg(lcdc_dev,SYS_CTRL,m_DSP_LUT_EN,v_DSP_LUT_EN(1)); //enable dsp lut
 		}
 		spin_unlock(&lcdc_dev->reg_lock);
+#endif
 	}
 
 	if(layer_id == 0)
@@ -925,10 +927,12 @@ static int rk3188_lcdc_early_suspend(struct rk_lcdc_device_driver *dev_drv)
 	struct rk3188_lcdc_device *lcdc_dev = 
 		container_of(dev_drv,struct rk3188_lcdc_device,driver);
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen0->standby)
 		dev_drv->screen0->standby(1);
 	if(dev_drv->screen_ctr_info->io_disable)
 		dev_drv->screen_ctr_info->io_disable();
+#endif
 
 	spin_lock(&lcdc_dev->reg_lock);
 	if(likely(lcdc_dev->clk_on))
@@ -957,8 +961,10 @@ static int rk3188_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 	int __iomem *c;
 	int v;
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen_ctr_info->io_enable) 		//power on
 		dev_drv->screen_ctr_info->io_enable();
+#endif
 	
 	if(!lcdc_dev->clk_on)
 	{
@@ -991,8 +997,10 @@ static int rk3188_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 	if(!lcdc_dev->atv_layer_cnt)
 		rk3188_lcdc_clk_disable(lcdc_dev);
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen0->standby)
 		dev_drv->screen0->standby(0);	      //screen wake up
+#endif
 	
 	return 0;
 }
@@ -1335,7 +1343,10 @@ static irqreturn_t rk3188_lcdc_isr(int irq, void *dev_id)
 {
 	struct rk3188_lcdc_device *lcdc_dev = 
 				(struct rk3188_lcdc_device *)dev_id;
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
+//Galland: might this interfere with phjanderson's Vsync fix??
 	ktime_t timestamp = ktime_get();
+#endif
 	
 	lcdc_msk_reg(lcdc_dev, INT_STATUS, m_FS_INT_CLEAR, v_FS_INT_CLEAR(1));
 
@@ -1345,8 +1356,10 @@ static irqreturn_t rk3188_lcdc_isr(int irq, void *dev_id)
 		complete(&(lcdc_dev->driver.frame_done));
 		spin_unlock(&(lcdc_dev->driver.cpl_lock));
 	}
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	lcdc_dev->driver.vsync_info.timestamp = timestamp;
 	wake_up_interruptible_all(&lcdc_dev->driver.vsync_info.wait);
+#endif
 	
 	return IRQ_HANDLED;
 }
@@ -1478,6 +1491,7 @@ static int __devinit rk3188_lcdc_probe(struct platform_device *pdev)
 	       goto err3;
 	}
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(screen_ctr_info->set_screen_info)
 	{
 		screen_ctr_info->set_screen_info(screen,screen_ctr_info->lcd_info);
@@ -1495,6 +1509,7 @@ static int __devinit rk3188_lcdc_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto err3;
 	}
+#endif
 	
 	ret = rk_fb_register(&(lcdc_dev->driver),&lcdc_driver,lcdc_dev->id);
 	if(ret < 0)
