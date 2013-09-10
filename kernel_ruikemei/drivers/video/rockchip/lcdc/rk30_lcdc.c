@@ -270,8 +270,14 @@ static int rk30_load_screen(struct rk_lcdc_device_driver *dev_drv, bool initscre
 	ft = (u64)(screen->upper_margin + screen->lower_margin + screen->y_res +screen->vsync_len)*
 		(screen->left_margin + screen->right_margin + screen->x_res + screen->hsync_len)*
 		(dev_drv->pixclock);       // one frame time ,(pico seconds)
+#ifdef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
+if (ft > 0) { //Galland avoid div by 0 when backporting
+#endif
 	fps = div64_u64(1000000000000llu,ft);
 	screen->ft = 1000/fps;
+#ifdef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
+} else  {fps=-1; }
+#endif
     	printk("%s: dclk:%lu>>fps:%d ",lcdc_dev->driver.name,clk_get_rate(lcdc_dev->dclk),fps);
 
     	if(screen->init)
@@ -397,6 +403,7 @@ static int win2_open(struct rk30_lcdc_device *lcdc_dev,bool open)
 	return 0;
 }
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 //$_rbox_$_modify_$_zhengyang added for hardware cursor
 static int cursor_open(struct rk30_lcdc_device *lcdc_dev, bool open)
 {
@@ -499,6 +506,7 @@ static int rk30_cursor_set_pos(struct rk_lcdc_device_driver *dev_drv, int x, int
 	lcdc_cfg_done(lcdc_dev);
 }
 //$_rbox_$_modify_$end
+#endif
 
 static int rk30_lcdc_blank(struct rk_lcdc_device_driver*lcdc_drv,int layer_id,int blank_mode)
 {
@@ -878,6 +886,7 @@ static int rk30_lcdc_open(struct rk_lcdc_device_driver *dev_drv,int layer_id,boo
 	if((open) && (!lcdc_dev->atv_layer_cnt)) //enable clk,when first layer open
 	{
 		rk30_lcdc_clk_enable(lcdc_dev);
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 		memcpy((u8*)lcdc_dev->regs, (u8*)lcdc_dev->regsbak, 0xc4);  //resume reg
 		rk30_load_screen(dev_drv,1);
 		spin_lock(&lcdc_dev->reg_lock);
@@ -896,6 +905,7 @@ static int rk30_lcdc_open(struct rk_lcdc_device_driver *dev_drv,int layer_id,boo
 			lcdc_msk_reg(lcdc_dev,SYS_CTRL1,m_DSP_LUT_RAM_EN,v_DSP_LUT_RAM_EN(1));
 		}
 		spin_unlock(&lcdc_dev->reg_lock);
+#endif
 	}
 	
 	if(layer_id == 0)
@@ -1023,6 +1033,7 @@ int rk30_lcdc_ioctl(struct rk_lcdc_device_driver * dev_drv,unsigned int cmd, uns
             		if(copy_to_user(argp, panel_size, 8)) 
 				return -EFAULT;
 			break;
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 		case FBIOPUT_SET_CURSOR_EN:
 			{
 				int en;
@@ -1055,6 +1066,7 @@ int rk30_lcdc_ioctl(struct rk_lcdc_device_driver * dev_drv,unsigned int cmd, uns
 				rk30_cursor_set_cmap(dev_drv, img.bg_color, img.fg_color);
 			}
 			break;
+#endif
 		default:
 			break;
 	}
@@ -1456,10 +1468,12 @@ int rk30_lcdc_early_suspend(struct rk_lcdc_device_driver *dev_drv)
 	struct rk30_lcdc_device *lcdc_dev = container_of(dev_drv,struct rk30_lcdc_device,driver);
 
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen0->standby)
 		dev_drv->screen0->standby(1);
 	if(dev_drv->screen_ctr_info->io_disable)
 		dev_drv->screen_ctr_info->io_disable();
+#endif
 	
 	spin_lock(&lcdc_dev->reg_lock);
 	if(likely(lcdc_dev->clk_on))
@@ -1489,8 +1503,10 @@ int rk30_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 	int __iomem *c;
 	int v;
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen_ctr_info->io_enable) 		//power on
 		dev_drv->screen_ctr_info->io_enable();
+#endif
 		
 	if(!lcdc_dev->clk_on)
 	{
@@ -1529,8 +1545,10 @@ int rk30_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 	#endif
 		rk30_lcdc_clk_disable(lcdc_dev);
 	
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(dev_drv->screen0->standby)
 		dev_drv->screen0->standby(0);	      //screen wake up
+#endif		
 		
 	//$_rbox_$_modify_$ zhengyang modified end
     	return 0;
@@ -1540,7 +1558,10 @@ int rk30_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 static irqreturn_t rk30_lcdc_isr(int irq, void *dev_id)
 {
 	struct rk30_lcdc_device *lcdc_dev = (struct rk30_lcdc_device *)dev_id;
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
+//Galland: might this interfere with phjanderson's Vsync fix??
 	ktime_t timestamp = ktime_get();
+#endif
 	
 	lcdc_msk_reg(lcdc_dev, INT_STATUS, m_FRM_START_INT_CLEAR, v_FRM_START_INT_CLEAR(1));
 	lcdc_cfg_done(lcdc_dev);
@@ -1553,9 +1574,11 @@ static irqreturn_t rk30_lcdc_isr(int irq, void *dev_id)
 		spin_unlock(&(lcdc_dev->driver.cpl_lock));
 	}
 
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	lcdc_dev->driver.vsync_info.timestamp = timestamp;
 	wake_up_interruptible_all(&lcdc_dev->driver.vsync_info.wait);
-	
+#endif
+
 	return IRQ_HANDLED;
 }
 
@@ -1695,6 +1718,7 @@ static int __devinit rk30_lcdc_probe (struct platform_device *pdev)
 	       goto err3;
 	}
 	
+#ifndef CONFIG_FB_CONSOLE_GALLAND_FIX //Galland to fix FRAMEBUFFER_CONSOLE on rk30 and rk31
 	if(screen_ctr_info->set_screen_info)
 	{
 		screen_ctr_info->set_screen_info(screen,screen_ctr_info->lcd_info);
@@ -1712,6 +1736,7 @@ static int __devinit rk30_lcdc_probe (struct platform_device *pdev)
 		ret =  -ENODEV;
 		goto err4;
 	}
+#endif
 	
 	ret = rk_fb_register(&(lcdc_dev->driver),&lcdc_driver,lcdc_dev->id);
 	if(ret < 0)
