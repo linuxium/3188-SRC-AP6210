@@ -7,6 +7,16 @@ menuconfig FB_ROCKCHIP
         ---help---
           Framebuffer driver for rockchip based platform
 
+config FB_PHJANDERSON_VSYNC_FIX
+	bool     "phjanderson's Android Vsync fix. (for Linux see Help!)"
+        help
+		Enable phjanderson's Android Vsync fix. It may cause 100% CPU usage on one core under Linux!
+
+config FB_CONSOLE_GALLAND_FIX
+	bool     "Galland's FB fix to re-enable Linux [boot] console."
+        help
+		Galland's FB fix to re-enable Linux [boot] console on RK30 and RK31 chips.
+
 config FB_MIRRORING
 	bool     "Mirroring support"
 	depends on FB_ROCKCHIP
