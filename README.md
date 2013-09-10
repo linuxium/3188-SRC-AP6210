@@ -8,3 +8,4 @@ Modified with fixes:
 
     Allow FRAMEBUFFER_CONSOLE
     phjanderson's Vsync fix
+    Bugfix for 1080p support on modern EDID >=1.3 screens
