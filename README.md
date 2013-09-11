@@ -9,3 +9,4 @@ Modified with fixes:
     Allow FRAMEBUFFER_CONSOLE
     phjanderson's Vsync fix
     Bugfix for 1080p support on modern EDID >=1.3 screens
+    Update asix.c Add D-Link DUB-E100 Ver:C1
