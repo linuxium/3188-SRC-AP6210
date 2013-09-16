@@ -10,3 +10,4 @@ Modified with fixes:
     phjanderson's Vsync fix
     Bugfix for 1080p support on modern EDID >=1.3 screens
     Update asix.c Add D-Link DUB-E100 Ver:C1
+    Override default HDMI setting (720p) when .config set to 1080p
